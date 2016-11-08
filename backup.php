@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Backup
-Version: 2.2
+Version: 2.3.0
 Plugin URI: http://hel.io/wordpress/backup/
 Description: Back up your WordPress website to Google Drive.
 Author: Sorin Iclanzan
@@ -326,7 +326,8 @@ class Backup {
 					add_filter( 'use_' . $t . '_transport', '__return_false' );
 
 		// Add 'Backup' to the Settings admin menu; save default metabox layout in the database.
-		add_action( 'admin_menu', array( &$this, 'backup_menu' ) );
+		//add_action( 'admin_menu', array( &$this, 'backup_menu' ) );
+		add_action( is_multisite() ? 'network_admin_menu' : 'admin_menu', [$this,'backup_menu'] );
 
 		// Handle Google OAuth2.
 		if ( $this->is_auth() )

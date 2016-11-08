@@ -1,19 +1,18 @@
 # Backup
 
-[Backup] (http://hel.io/wordpress/backup/) is a Wordpress plugin that makes backups of your Wordpress site locally or to
-Google Drive.
-
+[Backup] (https://github.com/iliu-net/Backup/) is a
+Wordpress plugin that makes backups of your Wordpress
+site locally or to Google Drive.
 
 ## Description
 
-If you use this plugin and find it useful please consider [donating](http://hel.io/donate/ "Make a donation for your
-favorite WordPress plugin."). I have invested (and continue to do so) a lot of time and effort into making this a useful
-and polished product even though at the moment I have no source of income. Even a small contribution helps a lot.
+Backup is a plugin that provides backup capabilities for
+Wordpress. Backups are `zip` archives created locally
+and uploaded to a folder of your choosing on Google
+Drive.
 
-Backup is a plugin that provides backup capabilities for Wordpress. Backups are `zip` archives created locally and
-uploaded to a folder of your choosing on Google Drive.
-
-You are in total control of what files and directories get backed up.
+You are in total control of what files and directories
+get backed up.
 
 ## Features
 
@@ -24,21 +23,23 @@ You are in total control of what files and directories get backed up.
 - Store backups locally and/or on Google Drive.
 - Interrupted uploads to Google Drive automatically resume.
 - Get email notifications when something goes wrong.
-- The settings page interface uses standard WordPress elements to fit right in.
+- The settings page interface uses standard WordPress
+  elements to fit right in.
 - Extensive contextual help included.
-- Advanced options are provided to control the inner workings of the plugin.
-
+- Advanced options are provided to control the inner
+  workings of the plugin.
 
 ## Installation
 
-The plugin requires WordPress 3.4 or higher and is installed like any other plugin.
+The plugin requires WordPress and is installed like any
+other plugin.
 
 - Upload the plugin to the `/wp-contents/plugins/` folder.
 - Activate the plugin from the 'Plugins' menu in WordPress.
 - Configure the plugin by following the instructions on the `Backup` settings page.
 
-If you need support configuring the plugin click on the `help` button on the top right of the settings page.
-
+If you need support configuring the plugin click on the
+`help` button on the top right of the settings page.
 
 ## Contributors
 
@@ -47,6 +48,9 @@ If you need support configuring the plugin click on the `help` button on the top
 
 
 ## Changelog
+
+**2.3.0** FORKED!
+
 
 **2.2**
 - I've included some constants that allow you to predefine options for the backup plugin in the `wp-config.php` file. These are `BACKUP_REFRESH_TOKEN`, `BACKUP_DRIVE_FOLDER`, `BACKUP_CLIENT_ID`, `BACKUP_CLIENT_SECRET` and `BACKUP_LOCAL_FOLDER`.
