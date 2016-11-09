@@ -3,7 +3,13 @@
 	<h2><?php _e( 'Backup Settings', $this->text_domain ); ?> <?php echo '<a id="need-help-link" class="add-new-h2" href="#contextual-help-wrap">' . __( "Need help?", $this->text_domain ) . '</a>'; ?></h2>
 	<div id="poststuff">
 		<div id="post-body" class="metabox-holder columns-<?php echo $screen_layout_columns; ?>">
-			<form action="<?php echo admin_url( "options-general.php?page=backup&action=update" ); ?>" method="post">
+			<form action="<?php
+			  if (is_multisite()) {
+			    echo network_admin_url( "settings.php?page=backup&action=update" );
+			  } else {
+			    echo admin_url( "options-general.php?page=backup&action=update" );
+			  }
+			?>" method="post">
 				<?php wp_nonce_field( 'closedpostboxes', 'closedpostboxesnonce', false ); ?>
 				<?php wp_nonce_field( 'meta-box-order', 'meta-box-order-nonce', false ); ?>
 				<?php wp_nonce_field( 'backup_options' ); ?>

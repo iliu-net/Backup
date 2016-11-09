@@ -43,14 +43,16 @@ If you need support configuring the plugin click on the
 
 ## Contributors
 
-- [Sorin Iclanzan] (https://github.com/iclanzan) - Code, Idea, Design
-- [Sergey Yakovlev] (https://github.com/sergeyklay) - Localization into Russian, Code
+- [Sorin Iclanzan](https://github.com/iclanzan) - Code, Idea, Design
+- [Sergey Yakovlev](https://github.com/sergeyklay) - Localization into Russian, Code
+- [Alejandro Liu](https://github.com/alejandroliu) - Forked from *2.2*.
 
 
 ## Changelog
 
 **2.3.0** FORKED!
-
+- Forked!
+- Added support for multisite.
 
 **2.2**
 - I've included some constants that allow you to predefine options for the backup plugin in the `wp-config.php` file. These are `BACKUP_REFRESH_TOKEN`, `BACKUP_DRIVE_FOLDER`, `BACKUP_CLIENT_ID`, `BACKUP_CLIENT_SECRET` and `BACKUP_LOCAL_FOLDER`.

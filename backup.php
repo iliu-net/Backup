@@ -326,7 +326,6 @@ class Backup {
 					add_filter( 'use_' . $t . '_transport', '__return_false' );
 
 		// Add 'Backup' to the Settings admin menu; save default metabox layout in the database.
-		//add_action( 'admin_menu', array( &$this, 'backup_menu' ) );
 		add_action( is_multisite() ? 'network_admin_menu' : 'admin_menu', [$this,'backup_menu'] );
 
 		// Handle Google OAuth2.
@@ -567,16 +566,30 @@ class Backup {
 	 * Action - Adds options page in the admin menu.
 	 */
 	function backup_menu() {
-		$this->pagehook = add_options_page(
+		if (is_multisite()) {
+		  $this->pagehook = add_submenu_page(
+			'settings.php',
+			__( 'Backup Settings', $this->text_domain ),
+			__( 'Backup', $this->text_domain ),
+			'manage_options', 'backup',
+			[ $this, 'options_page' ]
+		  );
+		  // Hook to update options
+		  add_action( 'load-'.$this->pagehook, array( &$this, 'options_update' ) );
+		  // Hook to add metaboxes, context help and screen options
+		  add_action( 'load-'.$this->pagehook, array( &$this, 'on_load_options_page' ) );
+		} else {
+		  $this->pagehook = add_options_page(
 			__( 'Backup Settings', $this->text_domain ),
 			__( 'Backup', $this->text_domain ),
 			'manage_options', 'backup',
 			array( &$this, 'options_page' )
-		);
-		// Hook to update options
-		add_action( 'load-'.$this->pagehook, array( &$this, 'options_update' ) );
-		// Hook to add metaboxes, context help and screen options
-		add_action( 'load-'.$this->pagehook, array( &$this, 'on_load_options_page' ) );
+		  );
+		  // Hook to update options
+		  add_action( 'load-'.$this->pagehook, array( &$this, 'options_update' ) );
+		  // Hook to add metaboxes, context help and screen options
+		  add_action( 'load-'.$this->pagehook, array( &$this, 'on_load_options_page' ) );
+		}
 	}
 
 	/**
