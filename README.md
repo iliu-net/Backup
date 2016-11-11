@@ -140,3 +140,9 @@ If you need support configuring the plugin click on the
 
 **1.0**
 - Initial release.
+
+## NOTES
+
+- Add restore functionality
+- See how to do resume
+- Convert to MultiSite

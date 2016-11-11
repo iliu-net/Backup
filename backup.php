@@ -13,6 +13,7 @@ Domain Path: /languages
 
 /*
 	Copyright 2012 Sorin Iclanzan  (email : sorin@hel.io)
+	Copyright 2016 Alejandro Liu (alejandro_liu@hotmail.com)
 
 	This file is part of Backup.
 
@@ -31,9 +32,10 @@ Domain Path: /languages
 */
 
 // Only load the plugin if needed.
-if ( is_admin() || defined( 'DOING_CRON' ) || isset( $_GET['doing_wp_cron'] ) || isset( $_GET['backup'] ) ) {
+if ( is_admin() || defined( 'DOING_CRON' ) || isset( $_GET['doing_wp_cron'] ) || isset( $_GET['backup'] ) ):
 
 // Load required classes.
+require_once('google-api-php-client-2.1.0_PHP54/vendor/autoload.php');
 if ( ! class_exists( 'GOAuth' ) )
 	require_once( 'class-goauth.php' );
 if ( ! class_exists( 'GDocs' ) )
@@ -200,14 +202,8 @@ class Backup {
 	 */
 	private $user_id;
 
-	/**
-	 * Stores the list of HTTP transports supported by WordPress
-	 *
-	 * @var array
-	 * @access private
-	 */
-	private $http_transports;
 
+	public $debug_msg; // TODO: DEBUG
 	/**
 	 * Constructor
 	 *
@@ -218,7 +214,9 @@ class Backup {
 	function __construct() {
 		global $timestart;
 
-		$this->version = '2.2';
+		$this->debug_msg = ''; // TODO: DEBUG
+
+		$this->version = '2.3';
 		$this->time = intval( $timestart );
 		$this->plugin_dir = dirname( plugin_basename( __FILE__ ) );
 		$this->text_domain = 'backup';
@@ -234,8 +232,6 @@ class Backup {
 			'https://docs.googleusercontent.com/',
 			'https://spreadsheets.google.com/feeds/'
 		);
-
-		$this->http_transports = array( 'curl', 'streams', 'fsockopen' );
 
 		$this->schedules = array(
 			'weekly' => array(
@@ -272,9 +268,6 @@ class Backup {
 				'chunk_size'          => 1, // MB
 				'time_limit'          => 600, // seconds
 				'backup_attempts'     => 3,
-				'request_timeout'     => 60, // seconds
-				'enabled_transports'  => $this->http_transports,
-				'ssl_verify'          => true,
 				'email_notify'        => false,
 				'user_info'           => array()
 			);
@@ -287,7 +280,6 @@ class Backup {
 				add_action( 'init', array( &$this, 'upgrade' ), 1 );
 
 		// Allow some options to be overwritten from the config file.
-		if ( defined( 'BACKUP_REFRESH_TOKEN' ) ) $this->options['refresh_token'] = BACKUP_REFRESH_TOKEN;
 		if ( defined( 'BACKUP_DRIVE_FOLDER' ) )  $this->options['drive_folder']  = BACKUP_DRIVE_FOLDER;
 		if ( defined( 'BACKUP_CLIENT_ID' ) )     $this->options['client_id']     = BACKUP_CLIENT_ID;
 		if ( defined( 'BACKUP_CLIENT_SECRET' ) ) $this->options['client_secret'] = BACKUP_CLIENT_SECRET;
@@ -319,14 +311,8 @@ class Backup {
 		// Link to the settings page from the plugins page
 		add_filter( 'plugin_action_links', array( &$this, 'action_links' ), 10, 2 );
 
-		// Disable unwanted HTTP transports.
-		if ( isset( $this->options['enabled_transports'] ) )
-			foreach ( $this->http_transports as $t )
-				if ( !in_array( $t, $this->options['enabled_transports'] ) )
-					add_filter( 'use_' . $t . '_transport', '__return_false' );
-
 		// Add 'Backup' to the Settings admin menu; save default metabox layout in the database.
-		add_action( is_multisite() ? 'network_admin_menu' : 'admin_menu', [$this,'backup_menu'] );
+		add_action( 'admin_menu', [$this,'backup_menu'] );
 
 		// Handle Google OAuth2.
 		if ( $this->is_auth() )
@@ -354,8 +340,6 @@ class Backup {
 			'client_secret'   => $this->options['client_secret'],
 			'redirect_uri'    => $this->redirect_uri,
 			'refresh_token'   => $this->options['refresh_token'],
-			'request_timeout' => $this->options['request_timeout'],
-			'ssl_verify'      => $this->options['ssl_verify']
 		) );
 
 		// If we're doing backup work set the environment accordingly.
@@ -472,10 +456,7 @@ class Backup {
 			$this->options['backup_token']        = wp_generate_password( 12, false );
 			$this->options['backup_title']        = get_bloginfo( 'name' );
 			$this->options['include_list']        = array();
-			$this->options['request_timeout']     = 60;
 			$this->options['backup_attempts']     = 3;
-			$this->options['enabled_transports']  = $this->http_transports;
-			$this->options['ssl_verify']          = true;
 			$this->options['email_notify']        = false;
 			$this->options['user_info']           = array();
 			$this->options['backup_list']         = array();
@@ -566,19 +547,6 @@ class Backup {
 	 * Action - Adds options page in the admin menu.
 	 */
 	function backup_menu() {
-		if (is_multisite()) {
-		  $this->pagehook = add_submenu_page(
-			'settings.php',
-			__( 'Backup Settings', $this->text_domain ),
-			__( 'Backup', $this->text_domain ),
-			'manage_options', 'backup',
-			[ $this, 'options_page' ]
-		  );
-		  // Hook to update options
-		  add_action( 'load-'.$this->pagehook, array( &$this, 'options_update' ) );
-		  // Hook to add metaboxes, context help and screen options
-		  add_action( 'load-'.$this->pagehook, array( &$this, 'on_load_options_page' ) );
-		} else {
 		  $this->pagehook = add_options_page(
 			__( 'Backup Settings', $this->text_domain ),
 			__( 'Backup', $this->text_domain ),
@@ -589,7 +557,6 @@ class Backup {
 		  add_action( 'load-'.$this->pagehook, array( &$this, 'options_update' ) );
 		  // Hook to add metaboxes, context help and screen options
 		  add_action( 'load-'.$this->pagehook, array( &$this, 'on_load_options_page' ) );
-		}
 	}
 
 	/**
@@ -648,8 +615,14 @@ class Backup {
 	 * @global object    $wp_locale
 	 */
 	function options_page() {
-		global $screen_layout_columns, $wp_locale;
-		require_once( 'page-options.php' );
+	  global $screen_layout_columns, $wp_locale;
+	  require_once( 'page-options.php' );
+	  // TODO: DEBUG
+	  if ($this->debug_msg) {
+	    echo '<hr/><pre>'.$this->debug_msg;
+	    echo '</pre><hr/>';
+	  }
+	  echo '<pre>';print_r($this);echo '</pre>';
 	}
 
 	function print_styles() {
@@ -705,7 +678,7 @@ class Backup {
 			</p>
 			<p class="para hide-if-js">
 				<label for="refresh_token"><?php _e( 'Refresh token', $this->text_domain ); ?>
-				<input id="refresh_token" name='refresh_token' type='text' <?php __checked_selected_helper( defined( 'BACKUP_REFRESH_TOKEN' ), true, true, 'readonly' ); ?> class="large-text" value='<?php echo esc_html( $this->options['refresh_token'] ); ?>' />
+				<input id="refresh_token" name='refresh_token' type='text' <?php __checked_selected_helper( FALSE, true, true, 'readonly' ); ?> class="large-text" value='<?php echo esc_html( $this->options['refresh_token'] ); ?>' />
 			</p>
 			<p>
 				<input name="authorize" type="submit" class="button-secondary" value="<?php _e( 'Authorize', $this->text_domain ) ?>" /> <a href="#refresh_token" class="show-para hide-if-no-js"><?php _e( 'More', $this->text_domain ); ?></a>
@@ -731,11 +704,7 @@ class Backup {
 		<p><?php _e( 'Authorization to use Google Drive has been granted.', $this->text_domain ); ?></p>
 		<p class="para hide-if-js"><input type="text" readonly="readonly" class="click-select large-text" value="<?php echo esc_html( $this->options['refresh_token'] ); ?>" /></p>
 		<p><?php
-			if ( defined( 'BACKUP_REFRESH_TOKEN' ) ) {
-				?><a class="button disabled"><?php
-			} else {
 				?><a href="<?php echo $this->redirect_uri; ?>&state=revoke" class="button-secondary"><?php
-			}
 			?><?php _e( 'Revoke access', $this->text_domain ); ?></a> <a href="#token-select" class="show-para hide-if-no-js"><?php _e( 'Show token', $this->text_domain ); ?></a></p><?php
 		}
 	}
@@ -846,44 +815,8 @@ class Backup {
 						'</tr>' .
 					'</tbody>' .
 				'</table>' .
-			'</div>' .
-			'<div class="comment-item">' .
-				'<h4>' . __( 'HTTP options', $this->text_domain ) . '</h4>' .
-				'<table class="form-table">' .
-					'<tbody>' .
-						'<tr valign="top">' .
-							'<th scope="row"><label for="request_timeout">' .
-							__( 'Request timeout', $this->text_domain ) . '</label></th>' .
-							'<td><input id="request_timeout" name="request_timeout" class="small-text" type="number" min="0" step="1" value="' .
-							intval( $this->options['request_timeout'] ) . '" /> <span>' .
-							__( 'seconds', $this->text_domain ) . '</span></td>' .
-						'</tr>' .
-						'<tr valign="top">' .
-							'<th scope="row">' . __( 'SSL verification', $this->text_domain ) . '</th>' .
-							'<td><label for="ssl_verify"><input id="ssl_verify" name="ssl_verify" type="checkbox" value="" ' .
-							checked( true, $this->options['ssl_verify'], false ) . ' /> ' .
-							__( 'Enable SSL verification.', $this->text_domain ) . '</label></td>' .
-						'</tr>' .
-						'<tr valign="top">' .
-							'<th scope="row">' . __( 'Enabled transports', $this->text_domain ) . '</th>' .
-							'<td>' .
-								'<div class="feature-filter">' .
-									'<ol class="feature-group">';
-										foreach ( $this->http_transports as $transport )
-											echo '<li><label for="transport_' . $transport . '"><input id="transport_' .
-												$transport . '" name="transports[]" type="checkbox" value="' . $transport . '" ' .
-												checked( true, in_array( $transport, $this->options['enabled_transports'] ), false ) . ' /> ' .
-												$transport . '</label></li>';
-		echo				  '</ol>' .
-										'<div class="clear">' .
-									'</div>' .
-								'</td>' .
-							'</tr>' .
-						'</tbody>' .
-					'</table>' .
-				'</div>' .
-			'</div>';
-
+                       '</div>' .
+		      '</div>';
 	}
 
 	/**
@@ -1021,11 +954,6 @@ class Backup {
 			else
 				$this->options['backup_title'] = $_POST['backup_title'];
 
-			// Save SSL verify.
-			if ( isset( $_POST['ssl_verify'] ) )
-				$this->options['ssl_verify'] = true;
-			else
-				$this->options['ssl_verify'] = false;
 
 			// Save email notify.
 			if ( isset( $_POST['email_notify'] ) )
@@ -1033,8 +961,6 @@ class Backup {
 			else
 				$this->options['email_notify'] = false;
 
-			// Save request timeout.
-			$this->options['request_timeout'] = absint( $_POST['request_timeout'] );
 
 			// If we have any error messages to display don't go any further with the function execution.
 			if ( empty( $this->messages['error'] ) )
@@ -1239,76 +1165,74 @@ class Backup {
 		}
 
 		if ( $this->options['drive_number'] > 0 && $this->goauth->is_authorized() ) {
-			if ( is_wp_error( $e = $this->need_gdocs() ) ) {
-				$this->log_wp_error( $e );
-				$this->reschedule_backup( $id );
-			}
-			if ( empty( $this->options['backup_list'][$id]['location'] ) ) {
-				$this->log( 'NOTICE', __( "Attempting to upload archive to Google Drive.", $this->text_domain ) );
-				$location = $this->gdocs->prepare_upload(
-					$this->options['backup_list'][$id]['file_path'],
-					$this->options['backup_list'][$id]['title'],
-					$this->options['drive_folder']
-				);
-			}
-			else {
-				$this->log( 'NOTICE', __( 'Attempting to resume upload.', $this->text_domain ) );
-				$location = $this->gdocs->resume_upload(
-					$this->options['backup_list'][$id]['file_path'],
-					$this->options['backup_list'][$id]['location']
-				);
-			}
-			if ( is_wp_error( $location ) ) {
-				$this->log_wp_error( $location );
-				$this->reschedule_backup( $id );
-			}
-			if ( is_string( $location ) ) {
-				$res = $location;
-				$this->log( 'NOTICE', sprintf(
-					__( "Uploading file with title '%s'.", $this->text_domain ),
-					esc_html( $this->options['backup_list'][$id]['title'] )
-				) );
-				$d = 0;
-				echo '<div id="progress">';
-				do {
-					$this->options['backup_list'][$id]['location'] = $res;
-					$res = $this->gdocs->upload_chunk();
-					$p = $this->gdocs->get_upload_percentage();
-					if ( $p - $d >= 1 ) {
-						$b = intval( $p - $d );
-						echo '<span style="width:' . $b . '%"></span>';
-						$d += $b;
-					}
-					$this->options['backup_list'][$id]['percentage'] = $p;
-					$this->options['backup_list'][$id]['speed'] = $this->gdocs->get_upload_speed();
-				} while ( is_string( $res ) );
-				echo '</div>';
-
-				if ( is_wp_error( $res ) ) {
-					$this->log_wp_error( $res );
-					$this->reschedule_backup( $id );
-				}
-
-				$this->log( 'NOTICE', sprintf(
-					__(
-						'The file was successfully uploaded to Google Drive in %1$s seconds at an upload speed of %2$s/s.',
-						$this->text_domain
-					),
-					number_format_i18n( $this->gdocs->time_taken(), 3 ),
-					size_format( $this->gdocs->get_upload_speed() )
-				) );
-				unset( $this->options['backup_list'][$id]['location'], $this->options['backup_list'][$id]['attempt'] );
-			}
-			elseif ( true === $location )
-				$this->log( 'WARNING', sprintf(
-					__( "The file '%s' is already uploaded.", $this->text_domain ),
-					esc_html( $this->options['backup_list'][$id]['file_path'] )
-				) );
-			$this->options['backup_list'][$id]['drive_id'] = $this->gdocs->get_file_id();
-			unset( $this->options['backup_list'][$id]['percentage'], $this->options['backup_list'][$id]['speed'] );
-			$this->update_quota();
-			if ( empty( $this->options['user_info'] ) )
-				$this->set_user_info();
+		  if ( is_wp_error( $e = $this->need_gdocs() ) ) {
+		    $this->log_wp_error( $e );
+		    $this->reschedule_backup( $id );
+		  }
+		  if ( empty( $this->options['backup_list'][$id]['location'] ) ) {
+		    $this->log( 'NOTICE', __( "Attempting to upload archive to Google Drive.", $this->text_domain ) );
+		    $location = $this->gdocs->prepare_upload(
+			    $this->options['backup_list'][$id]['file_path'],
+			    $this->options['backup_list'][$id]['title'],
+			    $this->options['drive_folder']
+		    );
+		  }
+		  else {
+		    $this->log( 'NOTICE', __( 'Attempting to resume upload.', $this->text_domain ) );
+		    $location = $this->gdocs->resume_upload(
+			    $this->options['backup_list'][$id]['file_path'],
+			    $this->options['backup_list'][$id]['location']
+		    );
+		  }
+		  if ( is_wp_error( $location ) ) {
+		    $this->log_wp_error( $location );
+		    $this->reschedule_backup( $id );
+		  }
+		  if ( is_string( $location ) ) {
+		    $res = $location;
+		    $this->log( 'NOTICE', sprintf(
+			    __( "Uploading file with title '%s'.", $this->text_domain ),
+			    esc_html( $this->options['backup_list'][$id]['title'] )
+		    ) );
+		    $d = 0;
+		    echo '<div id="progress">';
+		    do {
+		      $this->options['backup_list'][$id]['location'] = $res;
+		      $res = $this->gdocs->upload_chunk();
+		      $p = $this->gdocs->get_upload_percentage();
+		      if ( $p - $d >= 1 ) {
+			$b = intval( $p - $d );
+			echo '<span style="width:' . $b . '%"></span>';
+			$d += $b;
+		      }
+		      $this->options['backup_list'][$id]['percentage'] = $p;
+		      $this->options['backup_list'][$id]['speed'] = $this->gdocs->get_upload_speed();
+		    } while ( is_string( $res ) );
+		    echo '</div>';
+		    if ( is_wp_error( $res ) ) {
+		      $this->log_wp_error( $res );
+		      $this->reschedule_backup( $id );
+		    }
+		    $this->log( 'NOTICE', sprintf(
+			    __(
+				    'The file was successfully uploaded to Google Drive in %1$s seconds at an upload speed of %2$s/s.',
+				    $this->text_domain
+			    ),
+			    number_format_i18n( $this->gdocs->time_taken(), 3 ),
+			    size_format( $this->gdocs->get_upload_speed() )
+		    ) );
+		    unset( $this->options['backup_list'][$id]['location'], $this->options['backup_list'][$id]['attempt'] );
+		  }
+		  elseif ( true === $location )
+		    $this->log( 'WARNING', sprintf(
+			    __( "The file '%s' is already uploaded.", $this->text_domain ),
+			    esc_html( $this->options['backup_list'][$id]['file_path'] )
+		    ) );
+		  $this->options['backup_list'][$id]['drive_id'] = $this->gdocs->get_file_id();
+		  unset( $this->options['backup_list'][$id]['percentage'], $this->options['backup_list'][$id]['speed'] );
+		  $this->update_quota();
+		  if ( empty( $this->options['user_info'] ) )
+			  $this->set_user_info();
 		}
 		$this->options['backup_list'][$id]['status'] = 1;
 		$this->purge_backups();
@@ -1428,44 +1352,45 @@ class Backup {
 	 * @return mixed Returns TRUE if we have an instance of GDocs or one has been created, a WP_Error on failure.
 	 */
 	private function need_gdocs() {
-		if ( ! is_gdocs( $this->gdocs ) ) {
-			if ( ! $this->goauth->is_authorized() )
-				return new WP_Error( "not_authorized", "Account is not authorized." );
+	  if ( ! is_gdocs( $this->gdocs ) ) {
+	    if ( ! $this->goauth->is_authorized() )
+	      return new WP_Error( "not_authorized", "Account is not authorized." );
 
-			$access_token = $this->goauth->get_access_token();
-			if ( is_wp_error( $access_token ) ) {
-				return $access_token;
-			}
+	    $access_token = $this->goauth->get_access_token();
+	    if ( is_wp_error( $access_token ) ) {
+	      return $access_token;
+	    }
+	    $client = $this->goauth->new_client();
+	    $client->setAccessToken($access_token);
 
-			$this->gdocs = new GDocs( $access_token );
-			$this->gdocs->set_option( 'chunk_size', $this->options['chunk_size'] );
-			$this->gdocs->set_option( 'time_limit', $this->options['time_limit'] );
-			$this->gdocs->set_option( 'request_timeout', $this->options['request_timeout'] );
-			$this->gdocs->set_option( 'max_resume_attempts', $this->options['backup_attempts'] );
-		}
-		return true;
+	    $this->gdocs = new GDocs( $client );
+	    $this->gdocs->set_option( 'chunk_size', $this->options['chunk_size'] );
+	    $this->gdocs->set_option( 'time_limit', $this->options['time_limit'] );
+	    $this->gdocs->set_option( 'max_resume_attempts', $this->options['backup_attempts'] );
+	  }
+	  return true;
 	}
 
 	/**
 	 * Updates used and total quota.
 	 */
 	private function update_quota() {
-		if ( is_wp_error( $e = $this->need_gdocs() ) ) {
-			$this->log_wp_error( $e );
-			return;
-		}
+	  if ( is_wp_error( $e = $this->need_gdocs() ) ) {
+	    $this->log_wp_error( $e );
+	    return;
+	  }
 
-		$quota_used = $this->gdocs->get_quota_used();
-		if ( is_wp_error( $quota_used ) )
-			$this->log_wp_error( $quota_used );
-		else
-			$this->options['quota_used'] = $quota_used;
+	  $quota_used = $this->gdocs->get_quota_used();
+	  if ( is_wp_error( $quota_used ) )
+		  $this->log_wp_error( $quota_used );
+	  else
+		  $this->options['quota_used'] = $quota_used;
 
-		$quota_total = $this->gdocs->get_quota_total();
-		if ( is_wp_error( $quota_total ) )
-			$this->log_wp_error( $quota_total );
-		else
-			$this->options['quota_total'] = $quota_total;
+	  $quota_total = $this->gdocs->get_quota_total();
+	  if ( is_wp_error( $quota_total ) )
+		  $this->log_wp_error( $quota_total );
+	  else
+		  $this->options['quota_total'] = $quota_total;
 	}
 
 	/**
@@ -1517,81 +1442,77 @@ class Backup {
 	 * Handles Google OAuth2 requests
 	 */
 	function auth() {
-		if ( isset( $_GET['state'] ) ) {
-			if ( 'token' == $_GET['state'] ) {
-				$refresh_token = $this->goauth->request_refresh_token();
-				if ( is_wp_error( $refresh_token ) ) {
-					$this->messages['error'][] = __( 'Authorization failed!', $this->text_domain );
-					$this->messages['error'][] = $refresh_token->get_error_message();
-					return;
-				}
-				$this->options['refresh_token'] = $refresh_token;
-				$this->messages['updated'][] = __( 'Authorization was successful.', $this->text_domain );
+	  if ( isset( $_GET['state'] ) ) {
+	    if ( 'token' == $_GET['state'] ) {
+	      if (!empty($_GET['code'])) $this->debug_msg .= "CODE: ".$_GET['code']."\n";
+	      $refresh_token = $this->goauth->request_refresh_token();
+	      if ( is_wp_error( $refresh_token ) ) {
+		$this->messages['error'][] = __( 'Authorization failed!', $this->text_domain );
+		$this->messages['error'][] = $refresh_token->get_error_message();
+		return;
+	      }
+	      $this->options['refresh_token'] = $refresh_token;
+	      $this->messages['updated'][] = __( 'Authorization was successful.', $this->text_domain );
 
-				// Authorization was successful, so update quota.
-				$this->update_quota();
-				// Request and set user_info
-				$this->set_user_info();
-			}
-			elseif ( 'revoke' == $_GET['state'] && !defined( 'BACKUP_REFRESH_TOKEN' ) ) {
-				$result = $this->goauth->revoke_refresh_token();
-				if ( is_wp_error( $result ) ) {
-					$this->messages['error'][] = __( 'Could not revoke authorization!', $this->text_domain );
-					$this->messages['error'][] = $result->get_error_message();
-					return;
-				}
-				$this->options['refresh_token'] = '';
-				$this->options['quota_total'] = '';
-				$this->options['quota_used'] = '';
-				$this->options['user_info'] = array();
-				$this->messages['updated'][] = __( 'Authorization has been revoked.', $this->text_domain );
-			}
-			return;
-		}
-		if ( !isset( $_POST['client_id'] ) || !isset( $_POST['client_secret'] ) ) {
-			$this->messages['error'][] = __(
-				"You need to specify a 'Client ID' and a 'Client secret' in order to authorize the Backup plugin.",
-				$this->text_domain
-			);
-			return;
-		}
-		if ( !defined( 'BACKUP_CLIENT_ID' ) )
-			$this->options['client_id'] = $_POST['client_id'];
-		if ( !defined( 'BACKUP_CLIENT_SECRET' ) )
-			$this->options['client_secret'] = $_POST['client_secret'];
-		$this->goauth->set_options( array(
-			'client_id'     => $this->options['client_id'],
-			'client_secret' => $this->options['client_secret'],
-			'redirect_uri'  => $this->redirect_uri
-		) );
-		if ( empty( $_POST['refresh_token'] ) ) {
-			$this->goauth->request_authorization( $this->scope, 'token' );
-			exit;
-		}
-		if ( !defined( 'BACKUP_REFRESH_TOKEN' ) ) {
-			$this->options['refresh_token'] = $_POST['refresh_token'];
-			$this->goauth->set_options( array( 'refresh_token' => $this->options['refresh_token'] ) );
-		}
+	      // Authorization was successful, so update quota.
+	      $this->update_quota();
+	      // Request and set user_info
+	      $this->set_user_info();
+	    }
+	    elseif ( 'revoke' == $_GET['state']) {
+	      $result = $this->goauth->revoke_refresh_token();
+	      if ( is_wp_error( $result ) ) {
+		$this->messages['error'][] = __( 'Could not revoke authorization!', $this->text_domain );
+		$this->messages['error'][] = $result->get_error_message();
+		return;
+	      }
+	      $this->options['refresh_token'] = '';
+	      $this->options['quota_total'] = '';
+	      $this->options['quota_used'] = '';
+	      $this->options['user_info'] = array();
+	      $this->messages['updated'][] = __( 'Authorization has been revoked.', $this->text_domain );
+	    }
+	    return;
+	  }
+	  if ( !isset( $_POST['client_id'] ) || !isset( $_POST['client_secret'] ) ) {
+	    $this->messages['error'][] = __(
+		    "You need to specify a 'Client ID' and a 'Client secret' in order to authorize the Backup plugin.",
+		    $this->text_domain
+	    );
+	    return;
+	  }
+	  if ( !defined( 'BACKUP_CLIENT_ID' ) )
+		  $this->options['client_id'] = $_POST['client_id'];
+	  if ( !defined( 'BACKUP_CLIENT_SECRET' ) )
+		  $this->options['client_secret'] = $_POST['client_secret'];
+	  $this->goauth->set_options( array(
+		  'client_id'     => $this->options['client_id'],
+		  'client_secret' => $this->options['client_secret'],
+		  'redirect_uri'  => $this->redirect_uri
+	  ) );
+	  if ( empty( $_POST['refresh_token'] ) ) {
+		  $this->goauth->request_authorization( $this->scope, 'token' );
+		  exit;
+	  }
+	  $this->options['refresh_token'] = $_POST['refresh_token'];
+	  $this->goauth->set_options( array( 'refresh_token' => $this->options['refresh_token'] ) );
 	}
 
 	/**
 	 * Requests and saves user info (name, email, picture) from Google's userinfo service.
 	 */
 	function set_user_info() {
-		$token = $this->goauth->get_access_token();
-		if ( is_wp_error( $token ) )
-			return;
-		$result = wp_remote_get( 'https://www.googleapis.com/oauth2/v1/userinfo?access_token=' . $token );
-		if ( is_wp_error( $result ) )
-			return;
-		if ( '200' != $result['response']['code'] )
-			return;
-		$result = json_decode( $result['body'], true );
-		$this->options['user_info'] = array(
-			'email'   => $result['email'],
-			'name'    => $result['name'],
-			'picture' => $result['picture']
-		);
+	  $token = $this->goauth->get_access_token();
+	  if ( is_wp_error( $token ) ) return;
+	  $client = $this->goauth->new_client();
+	  $client->setAccessToken($token);
+	  $oauth = new Google_Service_Oauth2($client);
+	  $result = $oauth->userinfo->get();
+	  $this->options['user_info'] = [
+		  'email'   => $result->getEmail(),
+		  'name'    => $result->getName(),
+		  'picture' => $result->getPicture(),
+	  ];
 	}
 
 	private function mail( $id ) {
@@ -1703,10 +1624,12 @@ class Backup {
 			$part .= '>';
 		$part .= esc_html( $message ) . '</p>';
 		echo $part;
-		return error_log( date_i18n( "Y-m-d\tH:i:s" ) . "\t" . $type . "\t" . $message . "\n", 3, $this->log_file );
+		if (!empty($this->log_file)) return error_log( date_i18n( "Y-m-d\tH:i:s" ) . "\t" . $type . "\t" . $message . "\n", 3, $this->log_file );
+		return FALSE;
 	}
 }
 
 $backup = new Backup();
 
-} //end if
+endif;
+

@@ -1,6 +1,7 @@
 <?php
 /*
 	Copyright 2012 Sorin Iclanzan  (email : sorin@hel.io)
+	Copyright 2016 Alejandro Liu  (alejandro_liu@hotmail.com)
 
 	This file is part of Backup.
 
@@ -25,16 +26,8 @@
  *
  * @uses  WP_Error for storing error messages.
  */
+
 class GOAuth {
-
-	/**
-	 * Stores the base url to Google's OAuth2 server.
-	 *
-	 * @var string
-	 * @access  private
-	 */
-	private $base_url = 'https://accounts.google.com/o/oauth2/';
-
 	/**
 	 * Stores the Client Id.
 	 *
@@ -76,22 +69,6 @@ class GOAuth {
 	private $access_token;
 
 	/**
-	 * Stores the number of seconds to wait for a response before timing out.
-	 *
-	 * @var integer
-	 * @access private
-	 */
-	private $request_timeout;
-
-	/**
-	 * Stores whether or not to verify host SSL certificate.
-	 *
-	 * @var boolean
-	 * @access private
-	 */
-	private $ssl_verify;
-
-	/**
 	 * Constructor - Assigns values to some properties.
 	 *
 	 * @param array $args Optional. The list of options and values to set
@@ -102,8 +79,6 @@ class GOAuth {
 			'client_secret'   => '',
 			'redirect_uri'    => '',
 			'refresh_token'   => '',
-			'request_timeout' => 5,
-			'ssl_verify'      => true
 		);
 		$this->set_options( array_merge( $default_args, $args ) );
 	}
@@ -131,18 +106,15 @@ class GOAuth {
 	 * @return boolean        Returns TRUE on success, FALSE on failure.
 	 */
 	public function set_option( $option, $value ) {
-		switch ( $option ) {
-			case 'ssl_verify':
-				$this->ssl_verify = ( bool ) $value;
-				return;
-			case 'request_timeout':
-				if ( intval( $value ) > 0 )
-					$this->request_timeout = intval( $value );
-				return;
-			default:
-					$this->$option = ( string ) $value;
-					return;
-		}
+	  $this->$option = ( string ) $value;
+	}
+
+	public function new_client() {
+	  $client = new Google_Client();
+	  $client->setClientId($this->client_id);
+	  $client->setClientSecret($this->client_secret);
+	  $client->setRedirectUri($this->redirect_uri);
+	  return $client;
 	}
 
 	/**
@@ -155,62 +127,34 @@ class GOAuth {
 	 * @return NULL
 	 */
 	public function request_authorization( $scope = array() , $state = '', $approval_prompt = false ) {
-		$params = array(
-			'response_type' => 'code',
-			'client_id' => $this->client_id,
-			'redirect_uri' => $this->redirect_uri,
-			'scope' => implode( ' ', $scope ),
-			'access_type' => 'offline',
-		);
-		if ( ! empty( $state ) )
-			$params['state'] = $state;
-		if ( $approval_prompt )
-			$params['approval_prompt'] = $force;
-
-		header( 'Location: ' . $this->base_url . 'auth?' . http_build_query( $params ) );
+	  $client = $this->new_client();
+	  $client->setApplicationName('Backup WP Plugin');
+	  $client->setAccessType("offline");
+	  $client->setScopes($scope);
+	  if (!empty($state)) $client->setState($state);
+	  if ($approval_prompt) $client->setApprovalPrompt('force');
+	  $authUrl = $client->createAuthUrl();
+	  header('Location: ' . $authUrl);
 	}
 
 	/**
 	 * Requests a refresh token from Google's OAuth2 server.
 	 *
-	 * @uses  wp_remote_post
 	 * @access public
 	 * @param  string $code Authorization code received from Google. If empty the method will try to get it from $_GET['code'].
 	 * @return mixed        Returns a refresh token on success or an instance of WP_Error on failure.
 	 */
 	public function request_refresh_token( $code = '' ) {
-		if ( $code == '' )
-			$code = $_GET['code'];
-
-		$args = array(
-			'timeout' => $this->request_timeout,
-			'ssl_verify' => $this->ssl_verify,
-			'body' => array(
-				'code' => $code,
-				'client_id' => $this->client_id,
-				'client_secret' => $this->client_secret,
-				'redirect_uri' => $this->redirect_uri,
-				'grant_type' => 'authorization_code'
-			)
-		);
-
-		$result = wp_remote_post( $this->base_url . 'token', $args );
-
-		if ( is_wp_error( $result ) )
-			return $result;
-		else {
-			if ( $result['response']['code'] == '200' )	{
-				$result = json_decode( $result['body'], true );
-				if ( isset($result['refresh_token']) ) {
-					$this->refresh_token = $result['refresh_token'];
-					$this->access_token = $result['access_token'];
-					return $result['refresh_token'];
-				}
-				return new WP_Error('no_refresh_token', "Did not receive a refresh token.");
-			}
-			else
-				return new WP_Error( 'bad_response', 'The server returned code ' . $result['response']['code'] . ' ' . $result['response']['message'] . ' while trying to obtain a refresh token.' );
-		}
+	  if ( $code == '' ) $code = $_GET['code'];
+	  $client = $this->new_client();
+	  try {
+	    $client->authenticate($code);
+	  } catch (Exception $e) {
+	    return new WP_Error('invalid_operation',$e->getMessage());
+	  }
+	  $this->access_token = $client->getAccessToken();
+	  $this->refresh_token = $client->getRefreshToken();
+	  return $this->refresh_token;
 	}
 
 	/**
@@ -221,30 +165,15 @@ class GOAuth {
 	 * @return mixed   Returns a new access token on success or an instance of WP_Error on failure.
 	 */
 	private function request_access_token() {
-		$args = array(
-			'timeout' => $this->request_timeout,
-			'ssl_verify' => $this->ssl_verify,
-			'body' => array(
-				'refresh_token' => $this->refresh_token,
-				'client_id' => $this->client_id,
-				'client_secret' => $this->client_secret,
-				'grant_type' => 'refresh_token'
-			)
-		);
-
-		$result = wp_remote_post( $this->base_url . 'token', $args );
-
-		if( is_wp_error( $result ) )
-			return $result;
-		else {
-			if ( $result['response']['code'] == '200' )	{
-				$result = json_decode( $result['body'], true );
-				$this->access_token = $result['access_token'];
-				return $result['access_token'];
-			}
-			else
-				return new WP_Error('bad_response', 'The server returned code ' . $result['response']['code'] . ' ' . $result['response']['message'] . ' while trying to obtain an access token.');
-		}
+	  $client = $this->new_client();
+	  try {
+	    $client->refreshToken($this->refresh_token);
+	    $this->access_token = $client->getAccessToken();
+	  } catch (Exception $e) {
+	    return new WP_Error('invalid_operation',$e->getMessage());
+	  }
+	  if (!$this->access_token) return new WP_Error('invalid_operation',"Unable to authenticate");
+	  return $this->access_token;
 	}
 
 	/**
@@ -254,13 +183,13 @@ class GOAuth {
 	 * @return mixed  Returns the access token on success, an instance of WP_Error on failure.
 	 */
 	public function get_access_token() {
-		if ( empty( $this->access_token ) )
-			if ( empty( $this->refresh_token ) )
-				return new WP_Error( 'invalid_operation', 'You need a refresh token in order to request an access token.' );
-			else
-				return $this->request_access_token();
-		else
-			return $this->access_token;
+	  if ( empty( $this->access_token ) )
+	    if ( empty( $this->refresh_token ) )
+	      return new WP_Error( 'invalid_operation', 'You need a refresh token in order to request an access token.' );
+	    else
+	      return $this->request_access_token();
+	  else
+	    return $this->access_token;
 	}
 
 	/**
@@ -271,19 +200,11 @@ class GOAuth {
 	 * @return mixed Returns TRUE on success, an instance of WP_Error on failure.
 	 */
 	public function revoke_refresh_token() {
-		if ( ! empty( $this->refresh_token ) ) {
-			$result = wp_remote_get( $this->base_url . 'revoke?token=' . $this->refresh_token );
-			if ( is_wp_error( $result ) )
-				return $result;
-			else {
-				if ( $result['response']['code'] == '200' )	{
-					$this->refresh_token = '';
-					return true;
-				}
-				return new WP_Error("bad_response", "The server returned code " . $result['response']['code'] . " " . $result['response']['message'] . " while trying to revoke the refresh token.");
-			}
-		}
-		return new WP_Error( 'invalid_operation', 'There is no refresh token to revoke.' );
+	  if (empty($this->refresh_token)) return new WP_Error( 'invalid_operation', 'There is no refresh token to revoke.' );
+	  
+	  $client = $this->new_client();
+	  if ($client->revokeToken($this->refresh_token)) return TRUE;
+	  return new WP_Error('invalid_operation','Error revoking token');
 	}
 
 	/**

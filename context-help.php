@@ -107,17 +107,7 @@ $screen->add_help_tab( array(
 		'</p>' .
 		'<p><strong>' . __( 'Retry failed backups', $this->text_domain ) . '</strong> - ' .
 			__( 'The plugin will retry to back up after a failed backup attempt this many times before giving up.', $this->text_domain ) .
-		'</p>' .
 
-		'<h3>' . __( 'HTTP options', $this->text_domain ) . '</h3>' .
-		'<p><strong>' . __( 'Request timeout', $this->text_domain ) . '</strong> - ' .
-			__( 'Set this to the number of seconds the HTTP transport should wait for a response before timing out. Note that if your upload speed very slow you might need to set this to a higher value.', $this->text_domain ) .
-		'</p>' .
-		'<p><strong>' . __( 'SSL verification', $this->text_domain ) . '</strong> - ' .
-			__( 'Although not recommended, this option allows you to disable the SSL certificate verification.', $this->text_domain ) .
-		'</p>' .
-		'<p><strong>' . __( 'Enabled transports', $this->text_domain ) . '</strong> - ' .
-			__( 'If having trouble with HTTP requests, disabling one or more of the transports might help. At least one transport must remain enabled.', $this->text_domain) .
 		'</p>'
 ) );
 
