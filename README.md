@@ -146,3 +146,4 @@ If you need support configuring the plugin click on the
 - Add restore functionality
 - See how to do resume
 - Convert to MultiSite
+- Add uninstall script
