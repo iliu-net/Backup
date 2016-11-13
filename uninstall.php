@@ -15,7 +15,7 @@ if ( wp_next_scheduled( 'backup_schedule' ) ) {
 if ( defined( 'BACKUP_LOCAL_FOLDER' ) )
 	$folder = BACKUP_LOCAL_FOLDER;
 else {
-	$options = get_option( 'backup_options' );
+	$options = is_multisite() ? get_site_option('backup_options') : get_option( 'backup_options' );
 	$folder = $options['local_folder'];
 }
 $folder = absolute_path( $folder, ABSPATH );
@@ -23,4 +23,8 @@ if ( @file_exists( $folder . '/.backup' ) )
 	delete_path( $folder, true );
 
 // Delete options.
-delete_option( 'backup_options' );
+if (is_multisite()) {
+  delete_site_option( 'backup_options' );
+} else {
+  delete_option( 'backup_options' );
+}

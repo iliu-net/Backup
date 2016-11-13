@@ -243,10 +243,12 @@ class Backup {
 				'display' => __( 'Monthly', $this->text_domain )
 			)
 		);
-		$this->redirect_uri = admin_url( 'options-general.php?page=backup&action=auth' );
+		$this->redirect_uri = is_multisite() ? 
+		    network_admin_url( 'settings.php?page=backup&action=auth' ) :
+		    admin_url( 'options-general.php?page=backup&action=auth' );
 
 		// Get options if they exist, else set defaults
-		if ( ! $this->options = get_option( 'backup_options' ) ) {
+		if ( ! $this->options = is_multisite() ? get_site_option('backup_options',FALSE,FALSE) : get_option( 'backup_options' ) ) {
 			$this->options = array(
 				'plugin_version'      => $this->version,
 				'backup_token'        => '',
@@ -312,7 +314,7 @@ class Backup {
 		add_filter( 'plugin_action_links', array( &$this, 'action_links' ), 10, 2 );
 
 		// Add 'Backup' to the Settings admin menu; save default metabox layout in the database.
-		add_action( 'admin_menu', [$this,'backup_menu'] );
+		add_action( is_multisite() ? 'network_admin_menu' : 'admin_menu', [$this,'backup_menu'] );
 
 		// Handle Google OAuth2.
 		if ( $this->is_auth() )
@@ -411,9 +413,13 @@ class Backup {
 			$this->set_user_info();
 
 		// Add the default options to the database, without letting WP autoload them
-		add_option( 'backup_options', $this->options, '', 'no' );
-
-		$this->pagehook = get_plugin_page_hookname( 'backup', 'options-general.php' );
+		if (is_multisite()) {
+		  add_site_option( 'backup_options', $this->options);
+		  $this->pagehook = get_plugin_page_hookname( 'backup', 'settings.php' );
+		} else {
+		  add_option( 'backup_options', $this->options, '', 'no' );
+		  $this->pagehook = get_plugin_page_hookname( 'backup', 'options-general.php' );
+		}
 
 		if ( ! $this->user_id )
 			$this->user_id = get_current_user_id();
@@ -534,7 +540,8 @@ class Backup {
 		if ( $file != plugin_basename( __FILE__ ) )
 			return $links;
 
-		$settings_link = sprintf( '<a href="options-general.php?page=backup">%s</a>',
+		$settings_link = sprintf( '<a href="%s?page=backup">%s</a>',
+			is_multisite() ? 'network/settings.php' : 'options-general.php',
 			__( 'Settings', $this->text_domain )
 		);
 
@@ -547,6 +554,19 @@ class Backup {
 	 * Action - Adds options page in the admin menu.
 	 */
 	function backup_menu() {
+	  if (is_multisite()) {
+	    $this->pagehook = add_submenu_page(
+		  'settings.php',
+		  __( 'Backup Settings', $this->text_domain ),
+		  __( 'Backup', $this->text_domain ),
+		  'manage_options', 'backup',
+		  array( &$this, 'options_page' )
+	    );
+	    // Hook to update options
+	    add_action( 'load-'.$this->pagehook, array( &$this, 'options_update' ) );
+	    // Hook to add metaboxes, context help and screen options
+	    add_action( 'load-'.$this->pagehook, array( &$this, 'on_load_options_page' ) );
+	  } else {
 		  $this->pagehook = add_options_page(
 			__( 'Backup Settings', $this->text_domain ),
 			__( 'Backup', $this->text_domain ),
@@ -557,6 +577,7 @@ class Backup {
 		  add_action( 'load-'.$this->pagehook, array( &$this, 'options_update' ) );
 		  // Hook to add metaboxes, context help and screen options
 		  add_action( 'load-'.$this->pagehook, array( &$this, 'on_load_options_page' ) );
+	  }
 	}
 
 	/**
@@ -912,12 +933,6 @@ class Backup {
 					);
 			}
 
-			// Handle transports.
-			if ( !isset( $_POST['transports'] ) )
-				$this->messages['error'][] = __( 'You cannot have all HTTP transports disabled.', $this->text_domain );
-			else
-				$this->options['enabled_transports'] = $_POST['transports'];
-
 			// Handle sources and include list.
 			if ( !isset( $_POST['sources'] ) && empty( $_POST['include'] ) )
 				$this->messages['error'][] = __( 'Please make sure you select something to back up.', $this->text_domain );
@@ -1054,16 +1069,18 @@ class Backup {
 			);
 
 			// Save info about our new backup now, so we can have access to the log file even if MySQL connection is stolen.
-			update_option( 'backup_options', $this->options );
+			if (is_multisite()) {
+			  update_site_option( 'backup_options', $this->options );
+			} else {
+			  update_option( 'backup_options', $this->options );
+			}
 
 			// Log environment information.
 			if ( ! $z = phpversion( 'zip' ) )
 				$z = 'false';
 			$c = '';
-			if ( in_array( 'curl', $this->options['enabled_transports'] ) && function_exists( 'curl_version' ) ) {
-				$c = curl_version();
-				$c = '; CURL ' . $c['version'];
-			}
+			$c = curl_version();
+			$c = '; CURL ' . $c['version'];
 			$env = "Environment: Backup " . $this->version .
 							  "; WordPress " . $wp_version .
 							  "; PHP " . phpversion() .
@@ -1419,7 +1436,11 @@ class Backup {
 			unset( $this->options['messages']['error'] );
 		else
 			$msg .= '<p>' . sprintf( __( 'Visit the %s page to hide this notification.', $this->text_domain ),
-				'<a href="' . admin_url( "options-general.php?page=backup" ) . '">' .
+				'<a href="' . 
+				(is_multisite() ?
+				    network_admin_url('settings.php?page=backup') :
+				    admin_url( "options-general.php?page=backup" )
+				). '">' .
 				__( 'Backup Settings', $this->text_domain ) . '</a>' ) . '</p>';
 		echo '<div class="error">' . $msg . '</div>';
 	}
@@ -1545,8 +1566,13 @@ class Backup {
 	 * It gets executed at the end of script execution, even if exit is called.
 	 */
 	function shutdown() {
+	  if (is_multisite()) {
+	    if ( false !== get_site_option( 'backup_options', FALSE, FALSE ) )
+	      update_site_option( 'backup_options', $this->options );
+	  } else {
 		if ( false !== get_option( 'backup_options' ) )
 			update_option( 'backup_options', $this->options );
+	  }
 	}
 
 	/**

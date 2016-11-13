@@ -53,6 +53,7 @@ If you need support configuring the plugin click on the
 **2.3.0** FORKED!
 - Forked!
 - Added support for multisite.
+- Updated the Google Drive interface to use the official Google API PHP client.
 
 **2.2**
 - I've included some constants that allow you to predefine options for the backup plugin in the `wp-config.php` file. These are `BACKUP_REFRESH_TOKEN`, `BACKUP_DRIVE_FOLDER`, `BACKUP_CLIENT_ID`, `BACKUP_CLIENT_SECRET` and `BACKUP_LOCAL_FOLDER`.
@@ -145,5 +146,3 @@ If you need support configuring the plugin click on the
 
 - Add restore functionality
 - See how to do resume
-- Convert to MultiSite
-- Add uninstall script
