@@ -7,7 +7,8 @@ env:
   - secure: bi6X3U+BVT1w2/Mf7lJCO6uMa1c9z+sWasbQk4MAsaHAevZe1iNDV1QDNmObX3eH0nAzjicLbivRPG1hLS1/Gc69LBWQHTuTRS0AOocGvzhLNoeGryohyGkQELqSTUrS+LbpbRrNRY2ZQkRwTgESn+NJSTauO7trouH0uikc5+edW2NAiZ0K6Rwb9xfzSHrqb4qprZv/JYuTQ0TIrSOpOSxkFxc+rqH3i63PDDeuyldm/zvAWnmatxgRFfTcL66Rl/ECiKWDvA5HJ58LelbNhxwgQMD1B4CAl9JLtcCAfiNnOmlwpt1/XqXUgrC5qr6vydMF5J/T3UsNHo8TAuip0vQgAnRqd+NGF0nc75Nj9jaxAzbwh3wdqIH/zbAqzTOxV3wprRBDv9ohmwawRG2avAJ6Rs8/GDd8wsYGYN+v+g7eN8f45DT0bD8lPzb0Oj8EgfDuISqlJ9l3j/nqFc1rrYM1hifBKknJgpHqQPZ/cjuuddbJzetOCTt4e/Ec7HTx5ZfHuyjn5769aTavsKujqFxfJ//zv6ATVO2vqsmII1/PqI3tCtZF6nmS+wu2UClMUZJEK+E8bd4cU3cf5uA3qiIrQEn8FV2TXwpZ3Sw9sb4y8ur+kA4P1aMpJw7AQOqZPdWvZmGIJbPYcOhwSUK8bEvlYYOrdp4rdN+gfZIjODo=
 script:
 - ./prep.sh
-- IGNORE="^google-api-php-client-" ./ci-utils/phpcheck wp_plug && ./ci-utils/pushplug.sh
+- IGNORE="^google-api-php-client-" ./ci-utils/phpcheck wp_plug 
+- test -z "$TRAVIS_TAG" && ./ci-utils/pushplug.sh || true
 before_deploy:
 - ./prep.sh && ./ci-utils/mkplug.sh wp
 deploy:
