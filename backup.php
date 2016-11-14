@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Backup
-Version: 2.3.0
+Version: 2.3.1dev1
 Plugin URI: http://hel.io/wordpress/backup/
 Description: Back up your WordPress website to Google Drive.
 Author: Sorin Iclanzan
@@ -1190,7 +1190,7 @@ class Backup {
 		    $this->log( 'NOTICE', __( "Attempting to upload archive to Google Drive.", $this->text_domain ) );
 		    $location = $this->gdocs->prepare_upload(
 			    $this->options['backup_list'][$id]['file_path'],
-			    $this->options['backup_list'][$id]['title'],
+			    $this->options['backup_list'][$id]['title'].'.zip',
 			    $this->options['drive_folder']
 		    );
 		  }
