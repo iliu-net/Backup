@@ -9,6 +9,7 @@ Author URI: http://hel.io/
 License: GPL3
 Text Domain: backup
 Domain Path: /languages
+Network:     true
 */
 
 /*
